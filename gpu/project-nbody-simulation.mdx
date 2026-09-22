@@ -1,0 +1,265 @@
+---
+title: "N-body Gravitational Simulation: CPU vs GPU"
+sidebarTitle: "N-body Simulation"
+description: "An N-body gravitational simulation of 30,000 particles comparing a CPU sequential baseline against a GPU implementation using shared memory tiling, measured in billion interactions per second."
+---
+
+The final project simulates **gravitational forces among 30,000 particles** and benchmarks
+two implementations against each other:
+
+- **`ProjectSeq.cu`** — a pure CPU sequential baseline using a double-nested O(N²) loop
+- **`ProjectShared.cu`** — a GPU kernel that exploits shared memory tiling to minimize
+  global memory traffic
+
+Both implementations also detect and report particle collisions. Performance is reported
+in **Billion Interactions per second** (GI/s), where one "interaction" is the gravitational
+force computation between one pair of particles.
+
+<Info>
+  With N = 30,000, each time step requires 30,000² = **900,000,000 pairwise force
+  evaluations**. At 10 iterations, the total work is 9 billion interactions — making
+  raw throughput the critical metric.
+</Info>
+
+## CPU Baseline: `ProjectSeq.cu`
+
+### Data Layout
+
+Particles are stored as a flat array of `Body` structs:
+
+```cuda
+typedef struct { float x, y, z, vx, vy, vz; } Body;
+```
+
+Each body holds a 3D position and a 3D velocity. All 30,000 bodies are initialized with
+random values in [-1, 1] using a simple randomization pass.
+
+### Force Computation: O(N²) Nested Loop
+
+```cuda
+void bodyForce(Body *p, float dt, int n) {
+  for (int i = 0; i < n; i++) {
+    float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f;
+
+    for (int j = 0; j < n; j++) {
+      float dx = p[j].x - p[i].x;
+      float dy = p[j].y - p[i].y;
+      float dz = p[j].z - p[i].z;
+
+      float distSqr = dx*dx + dy*dy + dz*dz + SOFTENING;
+
+      // collision detection
+      if (i < j && distSqr < COLLISION_DIST * COLLISION_DIST) {
+          printf("Collision: %d & %d -> (%.3f %.3f %.3f) (%.3f %.3f %.3f)\n",
+                 i, j,
+                 p[i].x, p[i].y, p[i].z,
+                 p[j].x, p[j].y, p[j].z);
+      }
+
+      // Gravitational force with softening
+      float invDist  = 1.0f / sqrtf(distSqr);
+      float invDist3 = invDist * invDist * invDist;
+
+      Fx += dx * invDist3;
+      Fy += dy * invDist3;
+      Fz += dz * invDist3;
+    }
+
+    p[i].vx += dt * Fx;
+    p[i].vy += dt * Fy;
+    p[i].vz += dt * Fz;
+  }
+}
+```
+
+**Key details:**
+
+- **Softening factor** (`SOFTENING = 1e-9f`): added to `distSqr` before computing
+  `invDist` to prevent division-by-zero when two particles occupy the same position.
+- **Collision threshold** (`COLLISION_DIST = 0.01f`): if the raw `distSqr` (before
+  softening) is less than 0.01², the pair is logged as a collision. The `i < j` guard
+  ensures each pair is reported only once.
+- **Inverse-square law**: force magnitude is proportional to `1 / dist²`, implemented
+  as `invDist3 = (1/dist)³` so that `F = dx * invDist3` gives the correctly directed force.
+
+### Timing and Benchmark
+
+The CPU version uses `gettimeofday` (via the `timer2.h` utility) to time 10 iterations.
+The first iteration is a warm-up and is excluded from the average:
+
+```cuda
+double avgTime = totalTime / (double)(nIters - 1);  // excludes iteration 1
+double interactions = 1e-9 * (double)nBodies * (double)nBodies / avgTime;
+
+printf("%d Bodies: %.3f Billion Interactions/sec\n", nBodies, interactions);
+printf("Average time per iteration (excluding warm-up): %.3f sec\n", avgTime);
+printf("Total time for all iterations: %.3f sec\n", totalTime);
+```
+
+---
+
+## GPU Optimized: `ProjectShared.cu`
+
+### Data Layout: `float4` for Coalesced Access
+
+The GPU version stores positions and velocities as `float4` (4 × 32-bit floats) rather
+than as a struct of six floats:
+
+```cuda
+typedef struct { float4 *pos, *vel; } BodySystem;
+```
+
+The `float4` layout packs `x, y, z, w` into a 128-bit aligned type. GPU hardware can
+load all four components in a single coalesced memory transaction, reducing memory latency
+compared to loading each component individually from a struct.
+
+<Note>
+  The `w` field of the position `float4` is unused for the force computation — only `x`,
+  `y`, and `z` are needed. The `w` component could store mass in a future extension.
+</Note>
+
+### Shared Memory Tiling
+
+The key optimization is the **shared memory tile loop** inside the kernel. Instead of
+every thread independently fetching particle `j` from slow global memory, the entire
+block cooperatively loads a tile of `BLOCK_SIZE` (1,024) positions into fast on-chip
+`__shared__` memory, then all threads in the block compute forces from that cached tile:
+
+```cuda
+__global__ void bodyForce(float4 *p, float4 *v, float dt, int n) {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+
+    float Fx = 0.0f, Fy = 0.0f, Fz = 0.0f;
+
+    // Tile loop: iterate over all particle groups of size BLOCK_SIZE
+    for (int tile = 0; tile < gridDim.x; tile++) {
+
+        // shared memory array for x, y, z positions of one tile
+        __shared__ float3 pos_s[BLOCK_SIZE];
+
+        int idx = tile * blockDim.x + threadIdx.x;
+
+        // load particle from global memory; tpos temporarily holds x, y, z, w
+        float4 tpos = p[idx];
+
+        // copy only x, y, z into shared memory, discarding w
+        pos_s[threadIdx.x] = make_float3(tpos.x, tpos.y, tpos.z);
+
+        // ensure all threads in the block have finished writing to shared memory
+        __syncthreads();
+
+        // compute forces from all particles in this tile
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            int global_j = tile * blockDim.x + j;
+            if (global_j >= n) break;
+
+            float dx = pos_s[j].x - p[i].x;
+            float dy = pos_s[j].y - p[i].y;
+            float dz = pos_s[j].z - p[i].z;
+            float distSqr = dx*dx + dy*dy + dz*dz;
+
+            // collision detection from device code
+            if (i < global_j && distSqr < COLLISION_DIST * COLLISION_DIST) {
+                printf("Collision: %d & %d -> (%.3f %.3f %.3f) (%.3f %.3f %.3f)\n",
+                       i, global_j,
+                       p[i].x, p[i].y, p[i].z,
+                       pos_s[j].x, pos_s[j].y, pos_s[j].z);
+            }
+
+            // N-body gravitational force (with softening)
+            float distSqrSoft = distSqr + SOFTENING;
+            float invDist  = rsqrtf(distSqrSoft);
+            float invDist3 = invDist * invDist * invDist;
+
+            Fx += dx * invDist3;
+            Fy += dy * invDist3;
+            Fz += dz * invDist3;
+        }
+
+        __syncthreads();  // done reading this tile; safe to load the next one
+    }
+
+    v[i].x += dt * Fx;
+    v[i].y += dt * Fy;
+    v[i].z += dt * Fz;
+}
+```
+
+### Why Shared Memory Matters
+
+Without tiling, every thread would independently fetch particle `j`'s position from global
+memory for every `(i, j)` pair. With N = 30,000 and `BLOCK_SIZE` = 1,024:
+
+| | Without tiling | With tiling |
+|--|---------------|-------------|
+| **Global memory loads per tile** | `BLOCK_SIZE × BLOCK_SIZE` | `BLOCK_SIZE` (one load per thread) |
+| **Reduction factor** | — | **1,024×** fewer global reads |
+| **Data source for inner loop** | Global memory (~400–700 cycles latency) | Shared memory (~5 cycles latency) |
+
+The two `__syncthreads()` calls are essential:
+1. **Before** the inner `j` loop: ensures all threads have finished writing their particle
+   into `pos_s[]` before anyone reads from it.
+2. **After** the inner `j` loop: ensures all threads are done reading the current tile
+   before any thread overwrites `pos_s[]` with the next tile.
+
+<Note>
+  The GPU version uses `rsqrtf()` (hardware reciprocal square root) instead of the CPU's
+  `1.0f / sqrtf()`. This is a fast-math intrinsic that is both quicker and slightly less
+  precise — an acceptable trade-off for a physics simulation.
+</Note>
+
+### Timing: `cudaEvent_t` for Kernel-Only Measurement
+
+Unlike the CPU version which uses wall-clock time, the GPU version uses CUDA events to
+time **only the kernel execution**, excluding the cost of host-device memory transfers:
+
+```cuda
+cudaEvent_t start, stop;
+cudaEventCreate(&start);
+cudaEventCreate(&stop);
+
+for (int iter = 1; iter <= nIters; iter++) {
+    cudaMemcpy(d_buf, buf, bytes, cudaMemcpyHostToDevice);
+
+    cudaEventRecord(start);
+    bodyForce<<<nBlocks, BLOCK_SIZE>>>(d_p.pos, d_p.vel, dt, nBodies);
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    float timeComp = 0;
+    cudaEventElapsedTime(&timeComp, start, stop); // time in milliseconds
+
+    totalTime += timeComp / 1000.0; // convert to seconds
+
+    cudaMemcpy(buf, d_buf, bytes, cudaMemcpyDeviceToHost);
+    // ... integrate positions on CPU ...
+}
+
+double avgTime    = totalTime / (double)(nIters - 1);
+double interactions = 1e-9 * (double)nBodies * (double)nBodies / avgTime;
+```
+
+`cudaEventSynchronize(stop)` blocks the CPU until the GPU has finished executing the
+kernel, ensuring the elapsed time measurement is accurate before `cudaEventElapsedTime`
+is called.
+
+### Collision Detection on the Device
+
+A notable feature is that collision reporting is performed **inside the GPU kernel** using
+`printf` from device code — a CUDA 5+ capability. The condition `i < global_j` ensures
+each pair is logged exactly once, mirroring the CPU baseline's `i < j` guard.
+
+## Output
+
+Both programs produce the same result format:
+
+```
+=== RESULTS ===
+30000 Bodies: X.XXX Billion Interactions/sec
+Average time per iteration (excluding warm-up): X.XXX sec
+Total time for all iterations: X.XXX sec
+```
+
+The GPU shared memory version is expected to significantly outperform the CPU baseline
+on Lonestar6, with the magnitude of speedup depending on the GPU model available in the
+SLURM allocation.

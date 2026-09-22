@@ -1,0 +1,90 @@
+---
+title: "Hospital Database Management System: Project Overview"
+sidebarTitle: "Overview"
+description: "A MySQL relational database modeling a 9-floor hospital, managing 108 patients, 54 staff members, treatments, and billing with normalized tables and referential integrity."
+---
+
+## What Is This Project?
+
+The Hospital Database Management System is a fully normalized MySQL relational database built to model the day-to-day operations of a nine-floor hospital. Created by **Alex Dela Cruz** and **Inuka Hulathduwage**, the system tracks **108 patients**, **54 staff members** (9 doctors, 36 nurses, and 9 managers), **108 treatment records**, and **108 billing records** across a carefully structured set of 8 interrelated tables.
+
+The database handles everything from patient room assignments and medical history to staff shift scheduling, treatment outcomes, and billing totals — making it a practical reference for relational database design patterns including supertype/subtype hierarchies, junction tables, referential integrity, and computed payroll queries.
+
+---
+
+## Hospital Organization
+
+The hospital is organized across **9 floors**, each dedicated to a distinct medical specialty. Every floor operates independently with its own doctor, floor manager, and team of four nurses.
+
+| Floor | Department / Specialty | Doctor | Manager |
+|-------|------------------------|--------|---------|
+| 1 | General Medicine | Dr. John Doe | Manager Alice M. |
+| 2 | Cardiology | Dr. Jane Smith | Manager Bob B. |
+| 3 | Neurology | Dr. Robert Brown | Manager Carol C. |
+| 4 | Pediatrics | Dr. Emily Green | Manager David D. |
+| 5 | Oncology | Dr. Michael White | Manager Eve E. |
+| 6 | Orthopedics | Dr. Jessica Black | Manager Frank F. |
+| 7 | Gastroenterology | Dr. Kevin Grey | Manager Grace G. |
+| 8 | Pulmonology | Dr. Sarah Blue | Manager Henry H. |
+| 9 | Nephrology | Dr. Brian Red | Manager Ivy I. |
+
+---
+
+## Staff Structure Per Floor
+
+Each floor follows a consistent staffing model:
+
+<CardGroup cols={2}>
+  <Card title="Clinical Leadership" icon="user-doctor">
+    **1 Doctor** — Oversees all treatments on the floor and holds the highest hourly rate ($68–$78/hr).
+  </Card>
+  <Card title="Floor Management" icon="clipboard-user">
+    **1 Manager** — Administers the floor's operations and directly supervises all four nurses ($55/hr flat rate).
+  </Card>
+  <Card title="Practitioner Nurses" icon="staff-snake">
+    **2 Nurse Practitioners** — Advanced-practice nurses authorized to administer treatments alongside the doctor.
+  </Card>
+  <Card title="Standard Nurses" icon="user-nurse">
+    **2 Standard Nurses** — Support clinical care; `practitioner` flag set to `0` in the database.
+  </Card>
+</CardGroup>
+
+Each floor also houses **12 patients**, assigned to room numbers that encode both floor and room position (e.g., room `101` = Floor 1, Room 1; room `912` = Floor 9, Room 12).
+
+---
+
+## Key Design Features
+
+<AccordionGroup>
+  <Accordion title="Supertype / Subtype Staff Hierarchy">
+    The `staff` table acts as a **supertype** containing shared attributes for all personnel: `staff_id`, `position`, `clockin`, `clockout`, `hourly_rate`, and `name`. Three subtype tables — `doctor`, `nurse`, and `manager` — extend `staff` with role-specific columns. Each subtype's primary key is also a foreign key back to `staff` with `ON DELETE CASCADE`, so removing a staff record automatically removes the associated subtype row.
+
+    Staff IDs are banded by role for easy identification:
+    - **Doctors:** 901–909
+    - **Nurses:** 801–836
+    - **Managers:** 701–709
+  </Accordion>
+
+  <Accordion title="Many-to-Many Treatment–Staff Junction Table">
+    A single treatment can involve multiple staff members (typically 1 doctor and 1–2 nurses), and a staff member can participate in many treatments. The `treatment_staff` table resolves this relationship with a **composite primary key** on `(staff_id, treatment_id)`, linking the `staff` and `treatment` tables without data duplication.
+  </Accordion>
+
+  <Accordion title="Referential Integrity with Foreign Keys">
+    All cross-table relationships are enforced with named `CONSTRAINT` foreign keys. The cascade rules ensure that deleting a staff member also removes their subtype record, preventing orphaned rows. The `billing` and `treatment` tables both reference `patient`, so every financial and clinical record is always tied to a valid patient.
+  </Accordion>
+
+  <Accordion title="CHECK Constraint on Staff Position">
+    The `position` column on the `staff` table uses a `CHECK` constraint to restrict valid values to exactly three strings: `'doctor'`, `'nurse'`, or `'manager'`. This enforces data integrity at the database level, preventing invalid role assignments regardless of how data is inserted.
+
+    ```sql
+    position varchar(20)
+    check (position in ('doctor', 'nurse', 'manager'))
+    ```
+  </Accordion>
+
+  <Accordion title="Clock-In / Clock-Out Shift Tracking">
+    Each staff record stores `clockin` and `clockout` as `DATETIME` values. Combined with the `hourly_rate` column, these timestamps power a payroll query (Query 7) that uses MySQL's `TIMESTAMPDIFF(hour, clockin, clockout)` function to calculate exact hours worked and total daily earnings — without requiring any external payroll system.
+
+    Nurses work two staggered 8-hour shifts (07:00–15:00 or 13:00–21:00), doctors work 08:00–16:00, and managers work 09:00–17:00.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,35 @@
+---
+title: "Algorithms Course (CMPS 3013): Project Overview"
+sidebarTitle: "Overview"
+description: "An overview of CMPS 3013 Algorithms coursework by Alexander Dela Cruz, featuring a real-time dictionary search tool built in C++ with prefix matching, JSON parsing, and colored terminal output."
+---
+
+CMPS 3013 Algorithms is a course at MSU Texas completed by **Alexander Dela Cruz**. The coursework in this portfolio contains one completed assignment — **P02: Linear Search Using JSON and Getch** — a real-time, terminal-based dictionary search tool written in C++.
+
+## P02 — Real-Time Dictionary Search
+
+P02 is a type-ahead search program that lets you explore a large English dictionary by typing one character at a time directly in the terminal. Every keystroke instantly triggers a fresh prefix search, and results are rendered with color-coded highlighting so matching prefixes stand out at a glance.
+
+### What It Does
+
+- **Loads a large English dictionary from a JSON file** (`data/dictionary.json`) at startup, timing the load with a custom `Timer` class that wraps `std::chrono`.
+- **Reads input one character at a time** using a cross-platform `getch()` function — no Enter key required between characters. The terminal is put into raw mode so each keypress is captured immediately.
+- **Performs a prefix search on every keystroke**: the program re-scans every key in the JSON dictionary and collects any word that starts with the currently typed string.
+- **Displays matching words with highlighted prefixes**: the portion of each word that matches what you've typed is printed in red/underline, and the remaining characters are shown in blue, using the `rang.hpp` color library.
+- **Automatically prints a definition when exactly one match remains**: as soon as the prefix narrows down to a single dictionary entry, its full definition is retrieved from the JSON value and printed to the screen — no Enter key needed.
+- **Supports backspace/delete**: pressing the Delete key (ASCII 127) removes the last character from the search string and reruns the search.
+- **Exits cleanly on capital `Z`**: the `getch()` loop runs until the user presses `Z`, which terminates the program.
+
+### Technologies Used
+
+| Technology | Role |
+|---|---|
+| **C++** | Core implementation language |
+| **nlohmann/json** (`headers/json.hpp`) | Header-only library for parsing `dictionary.json` |
+| **rang.hpp** | Header-only library for cross-platform ANSI terminal colors |
+| **console.hpp** | Custom cross-platform header providing `getch()`, `clearConsole()`, and `getConsoleSize()` |
+| **timer.hpp** | Custom `Timer` class wrapping `std::chrono::steady_clock` for millisecond/nanosecond load-time measurement |
+
+---
+
+For a detailed walkthrough of how the program works — including code for every key function — see the [Dictionary Search deep-dive](/algorithms/dictionary-search).

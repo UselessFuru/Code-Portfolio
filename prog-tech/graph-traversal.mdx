@@ -1,0 +1,144 @@
+---
+title: "Graphin Sleezy: DFS Graph Traversal on 2D Grids"
+sidebarTitle: "Graph Traversal"
+description: "Two C++ solutions demonstrating recursive and iterative Depth-First Search on 2D grids: Flood Fill for pixel replacement and Number of Islands for counting connected components."
+---
+
+Assignment A08 – *Graphin Sleezy* introduces graph traversal using Depth-First Search (DFS). Both problems treat a 2D grid as an implicit graph where each cell is a node connected to its four orthogonal neighbors (up, down, left, right). **P-733 Flood Fill** uses an **iterative DFS** driven by an explicit `std::stack`, while **P-200 Number of Islands** uses a clean **recursive DFS** that marks visited cells in place.
+
+---
+
+## P-733: Flood Fill (Iterative DFS)
+
+Given a 2D integer matrix `image`, a starting pixel `(sr, sc)`, and a `color` value, replace the color of the starting pixel and every connected pixel of the same original color with `color`. Two pixels are connected if they are adjacent horizontally or vertically and share the same color.
+
+### How It Works
+
+1. Record the original color at `image[sr][sc]`.
+2. **Early exit**: if the original color already equals `color`, no work is needed — return immediately to avoid infinite loops.
+3. Call `dfs()`, which uses a `stack<pair<int,int>>` to process cells iteratively.
+4. Each iteration pops a cell, paints it with `newColor`, then pushes each of its four neighbors if they are in-bounds and still hold the original color.
+
+### Iterative DFS — `dfs.cpp`
+
+```cpp
+void dfs(vector<vector<int>>& image, int sr, int sc, int color,
+         int newColor) {
+    // stack to iterate dfs iteratively
+    stack<pair<int, int>> stc;
+    stc.push({sr, sc});
+
+    while (!stc.empty()) {
+        // get current pixel from stack
+        pair<int, int> current = stc.top();
+        stc.pop();
+
+        int currentSr = current.first;   // row index
+        int currentSc = current.second;  // col index
+
+        image[currentSr][currentSc] = newColor;
+
+        // push adjacent pixels to the stack
+        if (currentSr + 1 < image.size() && image[currentSr + 1][currentSc] == color)
+            stc.push(pair<int, int>(currentSr + 1, currentSc)); // down
+        if (currentSr - 1 >= 0 && image[currentSr - 1][currentSc] == color)
+            stc.push(pair<int, int>(currentSr - 1, currentSc)); // up
+        if (currentSc + 1 < image[0].size() && image[currentSr][currentSc + 1] == color)
+            stc.push(pair<int, int>(currentSr, currentSc + 1)); // right
+        if (currentSc - 1 >= 0 && image[currentSr][currentSc - 1] == color)
+            stc.push(pair<int, int>(currentSr, currentSc - 1)); // left
+    }
+}
+```
+
+### Entry Point — `floodFill.cpp`
+
+```cpp
+class Solution {
+public:
+    vector<vector<int>> floodFill(vector<vector<int>>& image, int sr, int sc,
+                                  int color) {
+        int regColor = image[sr][sc];
+
+        if (regColor == color)
+            return image;  // early exit — already the target color
+
+        dfs(image, sr, sc, regColor, color);
+        return image;
+    }
+};
+```
+
+The cell is painted **before** its neighbors are pushed rather than after popping; combined with the `== color` guard on each push, this prevents the same cell from being enqueued more than once.
+
+---
+
+## P-200: Number of Islands (Recursive DFS)
+
+Given a 2D grid of `'1'` (land) and `'0'` (water) characters, count the number of distinct islands. An island is a group of `'1'` cells connected horizontally or vertically, surrounded by water or grid boundary.
+
+### How It Works
+
+1. Iterate over every cell in the grid.
+2. When a `'1'` is encountered, increment `islandCount` and immediately call `dfs()` to "sink" the entire island — recursively overwriting every connected `'1'` with `'0'`.
+3. Because visited land is turned into water, no cell is counted twice.
+
+### Recursive DFS — `dfs.cpp`
+
+```cpp
+class Solution {
+public:
+    void dfs(vector<vector<char>>& grid, int row, int col) {
+        // Base case: out of bounds or already water
+        if (row < 0 || row >= grid.size() || col < 0 || col >= grid[0].size() ||
+            grid[row][col] == '0') {
+            return;
+        }
+        grid[row][col] = '0';  // mark as visited
+
+        dfs(grid, row + 1, col);  // down
+        dfs(grid, row - 1, col);  // up
+        dfs(grid, row, col + 1);  // right
+        dfs(grid, row, col - 1);  // left
+    }
+};
+```
+
+### Island Counter — `numIslands.cpp`
+
+```cpp
+class Solution {
+public:
+    int numIslands(vector<vector<char>>& grid) {
+        if (grid.empty()) {
+            return 0;
+        }
+
+        int rows = grid.size();
+        int cols = grid[0].size();
+        int islandCount = 0;
+
+        for (int i = 0; i < rows; ++i) {
+            for (int j = 0; j < cols; ++j) {
+                if (grid[i][j] == '1') {
+                    islandCount++;
+                    dfs(grid, i, j);  // sink the entire island
+                }
+            }
+        }
+        return islandCount;
+    }
+};
+```
+
+---
+
+## Recursive vs. Iterative DFS
+
+<Note>
+**Recursive DFS** (P-200) is more concise — the call stack manages traversal state automatically, and the base-case guard handles all boundary and visited checks in one `if` statement. It is the natural choice for most grid problems.
+
+**Iterative DFS** (P-733) replaces the implicit call stack with an explicit `std::stack`. This avoids the risk of a **stack overflow** on very large grids, where deep recursion could exhaust the program's call-stack memory. It is the safer choice for production code or unusually large inputs.
+
+Both strategies visit cells in the same DFS order and produce identical results; the difference is purely in how traversal state is stored.
+</Note>

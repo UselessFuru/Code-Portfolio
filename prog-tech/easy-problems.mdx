@@ -1,0 +1,335 @@
+---
+title: "Easy Breezy: Foundational C++ Algorithm Problems"
+sidebarTitle: "Easy Problems"
+description: "Eight LeetCode and two UVA Online Judge problems covering integer math, palindromes, greedy reachability, binary search, and string manipulation in C++."
+---
+
+Assignment A05 – *Easy Breezy* covers foundational algorithm design in C++. It consists of **eight LeetCode problems** and **two UVA Online Judge problems**, spanning techniques such as digit extraction, two-pointer string scanning, greedy reachability, and cursor simulation using vectors.
+
+---
+
+## LeetCode Problems
+
+### P-7: Reverse Integer
+
+Given a signed 32-bit integer `x`, return `x` with its digits reversed. If reversing causes the value to overflow the 32-bit signed integer range (`[-2³¹, 2³¹ - 1]`), return `0`.
+
+The algorithm extracts the last digit of `x` one at a time using `% 10`, then constructs the reversed number digit by digit. Before each addition, it checks whether appending the next digit would overflow `INT_MAX` or underflow `INT_MIN`.
+
+```cpp
+class Solution {
+public:
+    int reverse(int x) {
+        int max = 2147483647;
+        int min = -2147483648;
+
+        int reversed = 0;
+
+        while(x != 0){
+            int digit = x % 10; // get last digit
+            x /= 10;            // removes last digit from x
+
+            if(reversed > max/10 || (reversed == max / 10 && digit > 7)) // checks if reversed is over max
+                return 0;
+            if(reversed < min / 10 || (reversed == min / 10 && digit < -8))
+                return 0;
+
+            reversed = reversed * 10 + digit; // update reverse
+        }
+        return reversed;
+    }
+};
+```
+
+---
+
+### P-9: Palindrome Number
+
+Given an integer `x`, return `true` if it is a palindrome and `false` otherwise. All negative integers are non-palindromes by definition. The approach reverses the number numerically — using the same digit-extraction pattern as P-7 — then compares the reversed value to the original.
+
+<Note>
+No source file was submitted for this problem. The description is based on the problem statement and the technique described in the assignment README.
+</Note>
+
+---
+
+### P-55: Jump Game
+
+Given an array of non-negative integers where each value represents the maximum jump length from that position, return `true` if you can reach the last index from the first, or `false` otherwise.
+
+The solution uses a **greedy scan**: it tracks `maxJump`, the farthest index reachable so far. At each position `i`, if `i` is already beyond `maxJump`, the end cannot be reached. Otherwise, `maxJump` is updated if jumping from `i` reaches farther.
+
+```cpp
+class Solution {
+public:
+    bool canJump(vector<int>& nums) {
+        if(nums.empty())
+            return false;
+
+        if(nums[0] == 0 && nums.empty())
+            return true;
+
+        int maxJump, i = 0;
+
+        while(i < nums.size()){
+            if(i > maxJump)     // checks if maxJump could reach the index
+                return false;   // ie if i = 4 but maxJump = 3
+
+            if(maxJump < i + nums[i])   // updates max jump
+                maxJump = i + nums[i];
+
+            if(maxJump >= nums.size() - 1) // checks if maxJump reaches the end
+                return true;
+
+            i++;
+        }
+        return false;
+    }
+};
+```
+
+---
+
+### P-69: Sqrt(x)
+
+Given a non-negative integer `x`, return the integer square root — the largest integer `m` such that `m * m <= x`.
+
+The solution handles the edge cases `x = 0` and `x = 1` directly, then increments a `long long` counter `i` until `i * i` exceeds `x`, and returns `i - 1`. Using `long long` avoids overflow when squaring values near `INT_MAX`.
+
+```cpp
+class Solution {
+public:
+    int mySqrt(int x) {
+        if(x == 0 || x == 1) // edge cases for 0 and 1
+            return x;
+
+        long long i = 1; // long long handles edge case that int can't
+        while(i * i <= x)
+            i++;
+
+        return i - 1;
+    }
+};
+```
+
+---
+
+### P-125: Valid Palindrome
+
+Given a string `s`, return `true` if it is a palindrome when considering only alphanumeric characters and ignoring case.
+
+The solution uses a **two-pointer** approach: `left` starts at the beginning and `right` starts at the end. Each pointer skips non-alphanumeric characters by advancing inward, then the characters at both pointers are compared in lowercase. If any pair mismatches, the function returns `false` immediately.
+
+```cpp
+class Solution {
+public:
+    bool isPalindrome(string s) {
+        int left = 0;
+        int right = s.length() - 1;
+
+        while (left < right) {
+            // Skip non-alphanumeric from the left
+            while (left < right && !isalnum(s[left]))
+                left++;
+            // Skip non-alphanumeric from the right
+            while (left < right && !isalnum(s[right]))
+                right--;
+            // Compare characters in lowercase
+            if (tolower(s[left]) != tolower(s[right]))
+                return false;
+            left++;
+            right--;
+        }
+        return true;
+    }
+};
+```
+
+---
+
+### P-128: Longest Consecutive Sequence
+
+Given an unsorted array of integers, return the length of the longest sequence of consecutive integers (e.g., `[1, 2, 3, 4]`).
+
+The solution sorts the array first, then makes a single linear pass. Duplicates are skipped with `continue`. When a value is exactly one more than the previous, the current streak counter increments. When a gap is found, the best streak so far is updated and the counter resets.
+
+```cpp
+#include <algorithm>
+
+class Solution {
+public:
+    int longestConsecutive(vector<int>& nums) {
+        if (nums.empty())
+            return 0;
+
+        sort(nums.begin(), nums.end());
+
+        if (nums.front() == 0 && nums.back() == 0)
+            return 1;
+
+        int count = 1;  // current streak
+        int streak = 1; // longest streak
+
+        for (int i = 1; i < nums.size(); i++) {
+            if (nums[i] == nums[i - 1]) {
+                continue;                       // skip duplicates
+            } else if (nums[i] == nums[i - 1] + 1) {
+                count++;                        // extend streak
+            } else {
+                streak = max(streak, count);
+                count = 1;                      // reset for next sequence
+            }
+        }
+
+        streak = max(streak, count);
+        return streak;
+    }
+};
+```
+
+---
+
+### P-1281: Subtract Product and Sum of Digits
+
+Given an integer `n`, return the difference between the **product** of its digits and the **sum** of its digits.
+
+The solution extracts each digit using `% 10`, accumulates both `product` and `sum` simultaneously, removes the digit with `n /= 10`, and repeats until `n` is zero.
+
+```cpp
+class Solution {
+public:
+    int subtractProductAndSum(int n) {
+        if (n == 0 || n == 1)
+            return 0;
+
+        int sum = 0;
+        int product = 1;
+
+        while(n != 0){
+            int temp = n % 10;  // gets last digit
+            sum += temp;
+            product *= temp;
+            n /= 10;            // removes last digit
+        }
+
+        return product - sum;
+    }
+};
+```
+
+---
+
+### P-1342: Steps to Reduce a Number to Zero
+
+Given a non-negative integer `num`, return the number of steps to reduce it to zero. At each step: if the number is even, divide it by 2; if it is odd, subtract 1.
+
+```cpp
+class Solution {
+public:
+    int numberOfSteps(int num) {
+        int count = 0;
+        while (num != 0) {
+            if (num % 2 == 0) {
+                num = num / 2;
+                count++;
+            } else {
+                num -= 1;
+                count++;
+            }
+        }
+        return count;
+    }
+};
+```
+
+---
+
+## UVA Online Judge Problems
+
+### 10055 – Hashmat The Brave Warrior
+
+Hashmat's army and his enemy's army each have a known soldier count. To determine the difference in forces, the program reads pairs of `long` integers until EOF and outputs the absolute difference of each pair.
+
+```cpp
+#include <iostream>
+#include <cstdlib> // For abs()
+
+#define endl "\n"
+
+using namespace std;
+
+int main() {
+    long B = 0, A = 0, difference = 0;
+
+    while (cin >> A >> B) {
+        difference = A - B;
+        difference = abs(difference);
+        cout << difference << endl;
+    }
+    return 0;
+}
+```
+
+`long` is used rather than `int` because army sizes can exceed 32-bit integer limits on some platforms.
+
+---
+
+### 11988 – Broken Keyboard
+
+A broken keyboard has two faulty keys: `[` moves the cursor to the **front** of the text, and `]` moves it to the **back**. All other characters are typed at the current cursor position. Given a string of keypresses, output what actually appears on screen.
+
+The solution maintains two `vector<char>` buffers — `left` (characters before the cursor) and `right` (characters after) — plus a `braxWord` staging buffer that accumulates characters between bracket presses. When a bracket key is encountered, the staged segment is flushed into the appropriate buffer, and a `toggle` flag tracks which end is currently active.
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+using namespace std;
+
+int main() {
+    string line;
+
+    while (cin >> line) {
+        vector<char> left;      // characters inserted at the front
+        vector<char> right;     // characters inserted at the back
+        vector<char> braxWord;  // accumulates characters between brackets
+        bool toggle = false;    // false = insert at back, true = insert at front
+
+        for (char c : line) {
+            if (c == '[') {
+                if (toggle)
+                    left.insert(left.begin(), braxWord.begin(), braxWord.end());
+                else
+                    right.insert(right.end(), braxWord.begin(), braxWord.end());
+                braxWord.clear();
+                toggle = true;
+            } else if (c == ']') {
+                if (toggle)
+                    left.insert(left.begin(), braxWord.begin(), braxWord.end());
+                else
+                    right.insert(right.end(), braxWord.begin(), braxWord.end());
+                braxWord.clear();
+                toggle = false;
+            } else {
+                braxWord.push_back(c);
+            }
+        }
+
+        // Finalize the last segment
+        if (toggle)
+            left.insert(left.begin(), braxWord.begin(), braxWord.end());
+        else
+            right.insert(right.end(), braxWord.begin(), braxWord.end());
+
+        // Output: left buffer followed by right buffer
+        for (int j = 0; j < left.size(); j++)  cout << left[j];
+        for (int j = 0; j < right.size(); j++) cout << right[j];
+        cout << endl;
+
+        left.clear();
+        right.clear();
+    }
+    return 0;
+}
+```

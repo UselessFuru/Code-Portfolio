@@ -1,0 +1,299 @@
+---
+title: "Real-Time Dictionary Search with Prefix Matching in C++"
+sidebarTitle: "Dictionary Search"
+description: "A terminal-based C++ program that performs live prefix matching against a JSON dictionary file, highlighting matches in color and printing definitions when exactly one match remains."
+---
+
+P02 implements a type-ahead dictionary search in C++. As each character is typed into the terminal, the program re-scans the entire dictionary for words whose keys begin with the characters typed so far, then renders every match with the matching prefix highlighted in red and the rest of the word in blue. Once the prefix narrows down to a single word, the program automatically prints that word's full definition — no Enter key required at any point.
+
+## How It Works
+
+<Steps>
+  <Step title="Load the dictionary">
+    At startup, `main()` calls `loadJsonFile()` from `loadJsonEx.hpp`. This function opens `data/dictionary.json` using `std::ifstream`, streams the entire file into an `nlohmann::json` object, and surrounds the operation with `Timer::Start()` / `Timer::End()` calls so the load duration is printed to the console in nanoseconds.
+
+    After loading, the function performs a single initial scan as a warm-up: it iterates all keys and prints any that contain a hard-coded partial key (`"axal"` by default, or a command-line argument if one is supplied).
+
+    ```cpp
+    json loadJsonFile(string filePath, int argc, char** argv) {
+
+        Timer T;   // create a timer
+        T.Start(); // start it
+
+        ifstream fileStream(filePath);
+        string partialKey = " ";
+        json myJson;
+        if (fileStream.is_open()) {
+            fileStream >> myJson;
+            fileStream.close();
+        } else {
+            cerr << "Failed to open file: " << filePath << endl;
+            return 1;
+        }
+
+        T.End(); // end the current timer
+        printf("Nanoseconds: %.17f\n", (double)T.NanoSeconds() / 1000000000);
+
+        // The substring you are looking for in the keys
+        if (argc == 1)
+            partialKey = "axal";
+        else
+            partialKey = argv[1];
+
+        // Iterate over all key-value pairs
+        for (auto &element : myJson.items()) {
+            string key = element.key();
+
+            // Check if the key contains the partialKey substring
+            if (key.find(partialKey) != string::npos) {
+                cout << "Found partial match: " << key << " -> " << element.value() << endl;
+            }
+        }
+
+        return myJson;
+    }
+    ```
+
+    The returned `json` object is stored as `dictionary` in `main()` and reused for every search throughout the program's lifetime.
+  </Step>
+
+  <Step title="Read character input">
+    The main loop calls `getch()` (provided by `console.hpp`) in a `while` condition, blocking until the user presses a key. Because `getch()` puts the terminal into raw/non-canonical mode, characters are delivered one at a time without waiting for Enter.
+
+    ```cpp
+    while ((k = getch()) != 'Z') {
+
+        // Tests for a backspace and if pressed deletes
+        // last letter from "substr".
+        if ((int)k == 127) {
+            if (substr.size() > 0) {
+                substr = substr.substr(0, substr.size() - 1);
+                deleting = true;
+            }
+        } else {
+            deleting = false;
+            // Make sure a letter was pressed and only letter
+            if (!isalpha(k) && (int)k != 10 && (int)k != 32) {
+                errorMessage("Letters only!");
+                continue;
+            }
+
+            // We know its a letter, lets make sure its lowercase.
+            // Any letter with ascii value < 97 is capital so we lower it.
+            if ((int)k < 97 && (int)k != 10 && (int)k != 32) {
+                k += 32;
+            }
+            substr += k; // append char to substr
+        }
+        // ...search and display follows
+    }
+    ```
+
+    Key handling rules:
+    - **ASCII 127 (Delete/Backspace)**: removes the last character from `substr`.
+    - **Non-alpha, non-space, non-Enter**: displays an error and loops back without updating `substr`.
+    - **Uppercase letters (ASCII 65–90, excluding `Z`)**: converted to lowercase by adding 32 before appending.
+    - **Capital `Z`**: the `while` condition catches it and exits the loop cleanly.
+  </Step>
+
+  <Step title="Search on each keystroke">
+    After updating `substr`, the program immediately calls the JSON overload of `partialMatch()`. This function iterates every key-value pair in the `nlohmann::json` object and checks whether the key *starts with* the current `substr` using `std::string::compare` against position 0.
+
+    ```cpp
+    vector<string> partialMatch(json j, string substring) {
+      vector<string> matches; // to hold any matches
+
+      if (substring.size() == 0) {
+        return matches;
+      }
+
+      for (auto &element : j.items()) { // loop through JSON object
+        string key = element.key();     // get the key (term)
+        // Check if the key starts with the substring
+        if (key.compare(0, substring.size(), substring) == 0) {
+          matches.push_back(key);
+        }
+      }
+
+      return matches;
+    }
+    ```
+
+    Using `compare(0, substring.size(), substring)` ensures this is a strict **prefix** match — only words whose beginning characters exactly match `substr` are collected. The result is a `vector<string>` of all matching dictionary keys, which is then passed to the display layer.
+  </Step>
+
+  <Step title="Display results">
+    After collecting matches, the program prints the count and then loops through every match, calling `printHighlightedSubstr()` on each one. That function renders the matched prefix portion in **red + underline** and the remaining characters in **blue**, using the `rang` namespace.
+
+    ```cpp
+    void printHighlightedSubstr(string word, string substr, int loc) {
+      for (int j = 0; j < word.size(); j++) {
+        // if we are printing the substring turn it red
+        if (j >= loc && j <= loc + substr.size() - 1) {
+          cout << fg::red << style::underline << word[j] << fg::blue
+               << style::reset;
+        } else {
+          cout << fg::blue << word[j] << fg::reset << style::reset;
+        }
+      }
+    }
+    ```
+
+    `loc` is determined by calling `matches[i].find(substr)` before the call, which for prefix matches always returns `0`. The caller passes that position in so `printHighlightedSubstr` knows exactly which character range to color red.
+
+    The match count is also printed above the word list using bold/underline styling:
+
+    ```cpp
+    cout << style::bold << style::underline << fg::black
+         << "MATCHES: " << fg::green << matches.size() << style::reset
+         << fg::reset << endl << endl;
+    ```
+  </Step>
+
+  <Step title="Auto-definition">
+    Immediately after printing the match list, the program checks whether exactly one word survived the prefix filter. If so, it retrieves the value for that key directly from the `json` object and prints it — no keypress required:
+
+    ```cpp
+    if (matches.size() == 1) {
+        cout << "Definition: " << fg::reset
+             << fgB::magenta << dictionary[matches[0]]
+             << endl; // Print the definition
+    }
+    ```
+
+    Because `dictionary` is an `nlohmann::json` object, `dictionary[matches[0]]` performs an O(log n) key lookup and returns the definition string stored as the JSON value. The definition is rendered in bright magenta to distinguish it visually from the word list.
+  </Step>
+</Steps>
+
+---
+
+## Key Functions
+
+### `partialMatch(nlohmann::json& jmap, string substr)` — JSON prefix search
+
+Iterates every key-value pair in the `nlohmann::json` dictionary object. A key is included in the results only if it **starts with** `substr`, enforced by `key.compare(0, substr.size(), substr) == 0`. Returns a `vector<string>` of matching word strings (keys only — values are fetched separately when displaying definitions).
+
+```cpp
+vector<string> partialMatch(json j, string substring) {
+  vector<string> matches;
+
+  if (substring.size() == 0) {
+    return matches;
+  }
+
+  for (auto &element : j.items()) {
+    string key = element.key();
+    if (key.compare(0, substring.size(), substring) == 0) {
+      matches.push_back(key);
+    }
+  }
+
+  return matches;
+}
+```
+
+### `partialMatch(vector<string>& arr, string substr)` — plain-vector substring search
+
+An overload that operates on a `vector<string>` instead of a JSON object. Unlike the JSON overload, this version uses `string::find()` for a full **substring** match (not just prefix), meaning the query can appear anywhere in the word. Originally used with the bundled animal name list; the JSON overload above is what drives the live dictionary search.
+
+```cpp
+vector<string> partialMatch(vector<string> array, string substring) {
+  vector<string> matches;
+  size_t found;
+
+  if (substring.size() == 0) {
+    return matches;
+  }
+
+  for (int i = 0; i < array.size(); i++) {
+    found = array[i].find(substring);
+    if (found != string::npos) {
+      matches.push_back(array[i]);
+    }
+  }
+
+  return matches;
+}
+```
+
+### `printHighlightedSubstr(string word, string substr, int loc)`
+
+Walks through `word` character by character. Characters in the range `[loc, loc + substr.size())` are printed in **red + underline** via `rang`'s `fg::red` and `style::underline`. All other characters are printed in **blue** (`fg::blue`). Colors are reset after every character to prevent bleed into surrounding output.
+
+```cpp
+void printHighlightedSubstr(string word, string substr, int loc) {
+  for (int j = 0; j < word.size(); j++) {
+    if (j >= loc && j <= loc + substr.size() - 1) {
+      cout << fg::red << style::underline << word[j] << fg::blue
+           << style::reset;
+    } else {
+      cout << fg::blue << word[j] << fg::reset << style::reset;
+    }
+  }
+}
+```
+
+### `Timer` class (`headers/timer.hpp`)
+
+A lightweight RAII-style timer that wraps `std::chrono::steady_clock`. Call `Start()` before a block and `End()` after it, then query the elapsed time in seconds, milliseconds, or nanoseconds.
+
+```cpp
+class Timer {
+private:
+    std::chrono::time_point<std::chrono::steady_clock> start;
+    std::chrono::time_point<std::chrono::steady_clock> end;
+
+public:
+    Timer() {}
+
+    void Start() {
+        start = chrono::steady_clock::now();
+    }
+
+    void End() {
+        end = chrono::steady_clock::now();
+    }
+
+    auto NanoSeconds() {
+        return chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+    }
+
+    auto Seconds() {
+        return chrono::duration_cast<chrono::seconds>(end - start).count();
+    }
+
+    auto MilliSeconds() {
+        return chrono::duration_cast<chrono::milliseconds>(end - start).count();
+    }
+};
+```
+
+In `loadJsonFile()`, `Timer` is used to measure exactly how long it takes to stream and parse the full `dictionary.json` file, printing the result in fractional seconds.
+
+---
+
+## Data File
+
+`data/dictionary.json` is a large English dictionary where every JSON key is a word and its value is the plain-text definition. The structure looks like this:
+
+```json
+{
+  "aardvark": "An African burrowing mammal (Orycteropus afer) of nocturnal habits...",
+  "aardwolf": "A striped, hyena-like mammal (Proteles cristatus)...",
+  "abacus": "A frame with rows of wires or grooves along which beads are slid...",
+  ...
+}
+```
+
+The `nlohmann::json` library parses this directly into a `json` object, whose `.items()` iterator is used for all search passes. Individual definitions are retrieved by key with `dictionary[word]`.
+
+---
+
+## Dependencies
+
+| File | Purpose |
+|---|---|
+| **`headers/json.hpp`** | [nlohmann/json](https://github.com/nlohmann/json) — header-only C++ JSON library. Streams the entire `dictionary.json` file into a `json` object with a single `>>` operator call. No external build step required. |
+| **`headers/rang.hpp`** | [rang](https://github.com/agauniyal/rang) — header-only terminal color library. Provides `fg::`, `bg::`, `fgB::`, `bgB::`, and `style::` stream manipulators that emit ANSI escape codes on Linux/macOS and use Windows Console API on Windows. Depends only on the C++ standard library plus `unistd.h` (Unix) or `windows.h` / `io.h` (Windows). |
+| **`headers/console.hpp`** | Custom cross-platform header providing three utilities: `getch()` (single-character input without echo, using `termios` on Unix and `_getch()` on Windows), `clearConsole()` (ANSI escape sequence on Unix, `system("cls")` on Windows), and `getConsoleSize()` (terminal dimensions via `ioctl`/`TIOCGWINSZ` on Unix and `GetConsoleScreenBufferInfo` on Windows). |
+| **`headers/timer.hpp`** | Custom `Timer` class wrapping `std::chrono::steady_clock`. Provides `Start()`, `End()`, `Seconds()`, `MilliSeconds()`, and `NanoSeconds()` for measuring elapsed time at any granularity. Used in `loadJsonFile()` to report dictionary parse time. |

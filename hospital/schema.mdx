@@ -1,0 +1,240 @@
+---
+title: "Hospital Database Schema: Tables, Columns, and Relationships"
+sidebarTitle: "Schema"
+description: "Detailed schema for all 8 tables in the hospital database: patient, staff, doctor, nurse, manager, billing, treatment, and treatment_staff."
+---
+
+## Schema Overview
+
+The hospital database consists of **8 tables** organized around two central design patterns:
+
+1. **A staff supertype/subtype hierarchy** — a shared `staff` table extended by three role-specific subtypes (`doctor`, `nurse`, `manager`).
+2. **A patient → treatment → billing chain** — every patient has treatments, every treatment links to a billing record, and a junction table (`treatment_staff`) connects treatments to the staff who administered them.
+
+---
+
+## Table Relationships
+
+```
+patient ──────────────── billing
+   │                        │
+   └──── treatment ─────────┘
+              │
+         treatment_staff
+              │
+           staff
+          ┌──┴───┐
+        doctor  nurse
+                  │
+               manager
+```
+
+- `patient` → `billing`: one-to-one (each patient has one bill)
+- `patient` → `treatment`: one-to-one (each patient has one treatment record)
+- `treatment` → `billing`: many-to-one (a billing record may aggregate multiple cost sources)
+- `treatment` ↔ `staff`: many-to-many via `treatment_staff`
+- `staff` → `doctor` / `nurse` / `manager`: one-to-one subtype extension
+- `nurse` → `manager`: many-to-one (each nurse reports to one floor manager)
+
+---
+
+## Tables
+
+### `patient`
+
+Stores demographic and admission information for every patient in the hospital.
+
+```sql
+create table patient(
+patient_id integer not null,
+patient_name varchar(20),
+medical_information varchar(100),
+Emergency_Contact varchar(20) not null,
+date_of_birth Date,
+roomnumber integer,
+primary key (patient_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `patient_id` | `INTEGER` | Primary key. Assigned sequentially; IDs 1–12 are Floor 1 patients, 13–24 are Floor 2, and so on. |
+| `patient_name` | `VARCHAR(20)` | Patient's full name. |
+| `medical_information` | `VARCHAR(100)` | Free-text description of the patient's presenting condition or reason for admission. |
+| `Emergency_Contact` | `VARCHAR(20)` | Phone number for the patient's emergency contact. Marked `NOT NULL` — every patient must have one. |
+| `date_of_birth` | `DATE` | Patient's date of birth in `YYYY-MM-DD` format. |
+| `roomnumber` | `INTEGER` | Room assignment. The hundreds digit encodes the floor (e.g., `301` = Floor 3, Room 1; `912` = Floor 9, Room 12). |
+
+---
+
+### `staff` (supertype)
+
+The central supertype table for all hospital personnel. Every doctor, nurse, and manager has exactly one row here.
+
+```sql
+create table staff(
+staff_id integer not null,
+position varchar(20)
+check (position in ('doctor', 'nurse', 'manager')),
+clockin datetime,
+clockout datetime,
+hourly_rate decimal(10, 2),
+name varchar(30),
+primary key(staff_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `staff_id` | `INTEGER` | Primary key. Ranges by role: 901–909 (doctors), 801–836 (nurses), 701–709 (managers). |
+| `position` | `VARCHAR(20)` | Role designation. A `CHECK` constraint enforces only `'doctor'`, `'nurse'`, or `'manager'` are valid. |
+| `clockin` | `DATETIME` | Shift start timestamp, e.g. `2025-05-09 08:00:00`. |
+| `clockout` | `DATETIME` | Shift end timestamp, e.g. `2025-05-09 16:00:00`. |
+| `hourly_rate` | `DECIMAL(10,2)` | Hourly pay rate in dollars. Doctors earn $68–$78/hr, nurses $35–$45.50/hr, managers $55/hr. |
+| `name` | `VARCHAR(30)` | Staff member's full name (e.g., `'Dr. Jane Smith'`, `'Nurse Nancy One'`). |
+
+---
+
+### `doctor` (subtype)
+
+Extends `staff` with doctor-specific information. Has exactly 9 rows, one per floor.
+
+```sql
+create table doctor(
+Dstaff_id integer not null,
+specialization varchar (20),
+primary key (dstaff_id),
+constraint doctorfk1 foreign key (dstaff_id) references
+staff(staff_id) on delete cascade);
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `Dstaff_id` | `INTEGER` | Primary key and foreign key to `staff.staff_id`. `ON DELETE CASCADE` ensures the doctor row is removed if the parent staff record is deleted. |
+| `specialization` | `VARCHAR(20)` | The medical specialty corresponding to the doctor's floor (e.g., `'Cardiology'`, `'Neurology'`, `'Pediatrics'`). |
+
+---
+
+### `manager` (subtype)
+
+Extends `staff` with manager-specific information. Has exactly 9 rows, one per floor.
+
+```sql
+create table manager(
+mstaff_id integer not null,
+floor integer,
+primary key (mstaff_id),
+constraint managerfk1 foreign key (mstaff_id) references
+staff(staff_id) on delete cascade);
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `mstaff_id` | `INTEGER` | Primary key and foreign key to `staff.staff_id`. `ON DELETE CASCADE` propagates deletions from `staff`. |
+| `floor` | `INTEGER` | The hospital floor (1–9) this manager is responsible for overseeing. |
+
+---
+
+### `nurse` (subtype)
+
+Extends `staff` with nurse-specific information and a direct link to the supervising manager. Has 36 rows total (4 per floor).
+
+```sql
+create table nurse(
+nstaff_id integer not null,
+specialization varchar (20),
+practitioner bool,
+mstaff_id integer not null,
+primary key (nstaff_id),
+constraint nursefk1 foreign key (nstaff_id) references
+staff(staff_id) on delete cascade,
+constraint nursefk2 foreign key (mstaff_id) references
+manager(mstaff_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `nstaff_id` | `INTEGER` | Primary key and foreign key to `staff.staff_id`. `ON DELETE CASCADE` propagates deletions from `staff`. |
+| `specialization` | `VARCHAR(20)` | The nurse's area of specialty, aligned to their floor's department (e.g., `'Cardiology'`). |
+| `practitioner` | `BOOL` | Nurse practitioner flag. `1` = nurse practitioner (advanced practice); `0` = standard nurse. Each floor has 2 of each. |
+| `mstaff_id` | `INTEGER` | Foreign key to `manager.mstaff_id`. Identifies the floor manager who directly supervises this nurse. |
+
+---
+
+### `billing`
+
+Stores the financial summary for each patient's hospital stay. Each patient has exactly one billing record.
+
+```sql
+create table billing(
+billing_id integer not null,
+room_cost integer,
+total integer,
+patient_id integer not null,
+primary key(billing_id),
+constraint billingfk1 foreign key (patient_id) references
+patient(patient_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `billing_id` | `INTEGER` | Primary key for the billing record. |
+| `room_cost` | `INTEGER` | Daily room and board charge in dollars. |
+| `total` | `INTEGER` | Total bill amount, typically the sum of `room_cost` and associated `treatment_cost` values. |
+| `patient_id` | `INTEGER` | Foreign key to `patient.patient_id`. Links the bill to the patient being charged. |
+
+---
+
+### `treatment`
+
+Records clinical details about each patient's treatment episode, including timing, outcomes, cost, and links back to both the patient and their billing record.
+
+```sql
+create table treatment(
+treatment_id integer not null,
+treatmentstarted datetime,
+treatmentended datetime,
+results varchar(50),
+description varchar(50),
+treatment_cost integer,
+patient_id integer not null,
+billing_id integer not null,
+primary key(treatment_id),
+constraint treatmentfk1 foreign key (patient_id) references
+patient(patient_id),
+constraint treatmentfk2 foreign key (billing_id) references
+billing(billing_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `treatment_id` | `INTEGER` | Primary key for the treatment record. |
+| `treatmentstarted` | `DATETIME` | Timestamp when the treatment began. |
+| `treatmentended` | `DATETIME` | Timestamp when the treatment concluded. |
+| `results` | `VARCHAR(50)` | Clinical outcome of the treatment (e.g., `'Stable'`, `'Improving'`, `'Discharged'`). |
+| `description` | `VARCHAR(50)` | Name or description of the procedure performed (e.g., `'Blood pressure check'`, `'MRI scan'`). |
+| `treatment_cost` | `INTEGER` | Cost of this specific treatment in dollars. Used in Query 2 to filter high-cost treatments. |
+| `patient_id` | `INTEGER` | Foreign key to `patient.patient_id`. |
+| `billing_id` | `INTEGER` | Foreign key to `billing.billing_id`. Connects the treatment to the patient's overall bill. |
+
+---
+
+### `treatment_staff` (junction table)
+
+Resolves the many-to-many relationship between `treatment` and `staff`. Each row records that a specific staff member participated in a specific treatment. A typical treatment links 1 doctor and 1–2 nurses.
+
+```sql
+create table treatment_staff(
+staff_id integer not null,
+treatment_id integer not null,
+constraint treatment_staff_pk primary key (staff_id, treatment_id),
+constraint treatment_staff_fk1 foreign key (staff_id) references
+staff(staff_id),
+constraint treatment_staff_fk2 foreign key (treatment_id) references
+treatment(treatment_id));
+```
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `staff_id` | `INTEGER` | Part of the composite primary key. Foreign key to `staff.staff_id`. |
+| `treatment_id` | `INTEGER` | Part of the composite primary key. Foreign key to `treatment.treatment_id`. |
+
+The composite `PRIMARY KEY (staff_id, treatment_id)` prevents duplicate assignments — the same staff member cannot be recorded twice for the same treatment. This table is the join point for most of the analytical queries in the project.

@@ -1,0 +1,174 @@
+---
+title: "Hospital Database Analytical SQL Queries"
+sidebarTitle: "Queries"
+description: "Seven SQL queries for the hospital database covering staff pay rates, costly treatments, doctor-patient pairings, staff assignments, and daily pay calculation."
+---
+
+## Overview
+
+The `Queries.sql` file contains **7 analytical queries** written by Alex Dela Cruz and Inuka Hulathduwage. Each query answers a specific operational question about the hospital — from identifying high-cost treatments and doctor–patient pairings, to computing each staff member's daily earnings from shift timestamps. Together they demonstrate a range of SQL techniques: multi-table implicit joins, `WHERE`-clause filtering, `GROUP BY` aggregation, `COUNT(DISTINCT ...)`, and the `TIMESTAMPDIFF` datetime function.
+
+---
+
+## Query 1 — Staff Ordered by Hourly Pay Rate
+
+**Question answered:** Who are the highest-paid staff members, and how do pay rates compare across roles?
+
+```sql
+-- 1. Get staff names ordered by hourly rate in descending order.
+-- Purpose: Orders staff by pay rate.
+select name, hourly_rate
+from staff
+order by hourly_rate desc;
+```
+
+**What it returns:** Two columns — `name` and `hourly_rate` — for all 54 staff members, sorted from highest to lowest pay.
+
+**How it works:** A simple single-table `SELECT` with `ORDER BY hourly_rate DESC`. No joins are needed because all pay information lives directly on the `staff` supertype table. This query is useful for quickly identifying the compensation spread across doctors ($68–$78/hr), managers ($55/hr flat), and nurses ($35–$45.50/hr).
+
+---
+
+## Query 2 — Treatments Costing More Than $100
+
+**Question answered:** Which treatments are high-cost and what procedures do they involve?
+
+```sql
+-- 2. Get all treatments that cost more than 100.
+-- Purpose: Filters treatments based on cost.
+select description, treatment_cost
+from treatment
+where treatment_cost > 100;
+```
+
+**What it returns:** Two columns — `description` (the procedure name) and `treatment_cost` — for every treatment record where the cost exceeds $100.
+
+**How it works:** A single-table `SELECT` with a `WHERE` filter on the numeric `treatment_cost` column. This is the simplest filtering query in the set, demonstrating basic predicate logic against the `treatment` table. It could be extended with a `JOIN` to `patient` if patient-level detail is needed alongside the cost data.
+
+---
+
+## Query 3 — Doctor–Patient Pairings
+
+**Question answered:** Which doctor is responsible for treating which patient?
+
+```sql
+-- 3. Get the names of all doctors and the patients they are treating.
+-- Purpose: Joins staff, doctor, treatment, and patient information using where clauses.
+select s.name as doctor_name, p.patient_name
+from staff s, doctor d, treatment_staff ts, treatment t, patient p
+where s.staff_id = d.dstaff_id
+and s.staff_id = ts.staff_id
+and ts.treatment_id = t.treatment_id
+and t.patient_id = p.patient_id
+and s.position = 'doctor';
+```
+
+**What it returns:** Two columns — `doctor_name` and `patient_name` — showing every doctor–patient pair linked through the treatment chain.
+
+**How it works:** This is the most complex join in the file, traversing **5 tables** using the implicit (comma-separated) join syntax with `WHERE`-clause join conditions. The path through the data is:
+
+1. `staff` → `doctor` (confirm the staff member is a doctor via `dstaff_id`)
+2. `staff` → `treatment_staff` (find which treatments the doctor participated in)
+3. `treatment_staff` → `treatment` (get the treatment record)
+4. `treatment` → `patient` (get the patient associated with that treatment)
+
+The final `AND s.position = 'doctor'` predicate ensures only doctor-role staff are returned, even though joining to the `doctor` subtype table already implies this.
+
+---
+
+## Query 4 — Staff Who Treated a Specific Patient
+
+**Question answered:** Which staff members (doctor and nurses) were involved in treating a named patient?
+
+```sql
+-- 4. Get the names of staff members who administered treatments to patient 'Alice Adams'.
+-- Purpose: Filters based on a patient name using where clauses.
+select s.name as staff_name, p.patient_name as patient_name
+from staff s, treatment_staff ts, treatment t, patient p
+where s.staff_id = ts.staff_id
+and ts.treatment_id = t.treatment_id
+and t.patient_id = p.patient_id
+and p.patient_name = 'Alice Adams';
+```
+
+**What it returns:** Two columns — `staff_name` and `patient_name` — listing every staff member (regardless of role) who appears in a `treatment_staff` record linked to Alice Adams' treatment.
+
+**How it works:** Joins **4 tables** with an implicit join and filters by exact patient name match (`p.patient_name = 'Alice Adams'`). Unlike Query 3, this query does **not** filter by `position`, so it returns both the doctor and nurses who participated in the treatment. The `patient_name` column is included in the output as confirmation of the filter. This query can be adapted for any patient by changing the name literal.
+
+---
+
+## Query 5 — Patient Count Per Doctor
+
+**Question answered:** How many unique patients is each doctor currently treating?
+
+```sql
+-- 5. Get the names of doctors and the number of patients they are treating.
+-- Purpose: Uses a group by clause to count patients per doctor.
+select s.name as doctor_name, COUNT(DISTINCT p.patient_id) as number_of_patients_treating
+from staff s, doctor d, treatment_staff ts, treatment t, patient p
+where s.staff_id = d.dstaff_id
+and s.staff_id = ts.staff_id
+and ts.treatment_id = t.treatment_id
+and t.patient_id = p.patient_id
+and s.position = 'doctor'
+group by s.name;
+```
+
+**What it returns:** Two columns — `doctor_name` and `number_of_patients_treating` — with one row per doctor showing their patient load.
+
+**How it works:** Builds on the same 5-table join pattern as Query 3, but adds `GROUP BY s.name` to collapse all of a doctor's treatment rows into a single summary row per doctor. `COUNT(DISTINCT p.patient_id)` is used rather than plain `COUNT(*)` to ensure each patient is counted only once, even if multiple treatment records exist for them. In this dataset each doctor treats exactly 12 patients (one per floor room), so the output validates the data model's uniformity.
+
+---
+
+## Query 6 — Staff-to-Treatment Mapping
+
+**Question answered:** For each staff member, which treatments have they administered?
+
+```sql
+-- 6. Show the name of each staff member and the treatments they have administered.
+-- Purpose: Joins staff and treatment_staff.
+select s.name as staff_name, t.description
+from staff s, treatment_staff ts, treatment t
+where s.staff_id = ts.staff_id
+and ts.treatment_id = t.treatment_id;
+```
+
+**What it returns:** Two columns — `staff_name` and `description` (the treatment procedure name) — with one row per staff-member–treatment combination.
+
+**How it works:** The most direct query against the junction table, joining only **3 tables**: `staff`, `treatment_staff`, and `treatment`. Because `treatment_staff` holds one row per (staff, treatment) pair, this query naturally produces multiple rows per staff member — one for each treatment they participated in. This is a straightforward demonstration of how the many-to-many junction table is traversed.
+
+---
+
+## Query 7 — Daily Pay Calculation
+
+**Question answered:** How much did each staff member earn during their shift today?
+
+```sql
+-- 7. Show the amount a staff has made within the workday
+select
+    s.staff_id,
+    s.name,
+    s.clockin,
+    s.clockout,
+    s.hourly_rate,
+    -- Calculate the difference in hours between clockout and clockin.
+    timestampdiff(hour, s.clockin, s.clockout) as hours_worked,
+    -- Calculate the total pay by multiplying hours worked by hourly_rate.
+    (timestampdiff(hour, s.clockin, s.clockout) * s.hourly_rate) as total_pay
+from
+    staff s
+order by s.staff_id;
+```
+
+**What it returns:** Seven columns for every staff member: `staff_id`, `name`, `clockin`, `clockout`, `hourly_rate`, `hours_worked`, and `total_pay`.
+
+**How it works:** This query uses MySQL's built-in `TIMESTAMPDIFF(unit, datetime1, datetime2)` function to compute the number of whole hours between `clockin` and `clockout` for each staff record. That integer is then multiplied by `hourly_rate` to produce `total_pay`. The results are ordered by `staff_id` for readability.
+
+Key observations about the output:
+- All shifts are exactly **8 hours** in the sample data, so `hours_worked` is uniformly `8`.
+- A doctor earning `$75.00/hr` would show `total_pay = 600.00`.
+- All 9 managers earn `$55.00/hr × 8 hrs = $440.00`.
+- Nurse pay ranges from `$35.00 × 8 = $280.00` up to `$45.50 × 8 = $364.00`.
+
+<Note>
+  `TIMESTAMPDIFF(hour, ...)` truncates to whole hours. If a shift were 8 hours and 45 minutes, it would return `8`, not `8.75`. For precise fractional-hour pay, `TIMESTAMPDIFF(minute, clockin, clockout) / 60.0` would be more accurate.
+</Note>

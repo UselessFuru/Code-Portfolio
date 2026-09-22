@@ -1,0 +1,87 @@
+---
+title: "GPU Programming with CUDA: Project Overview"
+sidebarTitle: "Overview"
+description: "An overview of three CUDA assignments and a final N-body simulation project, demonstrating GPU parallel computing from basic parallelism to shared memory optimization."
+---
+
+This collection of CUDA programs was written by **Alexander Dela Cruz** (and co-authored with **Jose Espino** for Assignment 3) as coursework in GPU parallel computing. Starting from first principles — allocating device memory, launching a kernel, copying results back — the work progressively introduces more sophisticated scheduling strategies, signal-processing algorithms, and high-performance simulation techniques. All code was compiled and executed on the **TACC Lonestar6 HPC cluster** using **CUDA 11.3** and submitted through the **SLURM** job scheduler.
+
+## Projects at a Glance
+
+<CardGroup cols={2}>
+  <Card title="Assignment 1: Array Multiplication" icon="grid-2" href="/gpu/assignment1-array-multiplication">
+    Multiplies two 4,096-element integer arrays element-by-element using 64 blocks × 64 threads. Introduces the core CUDA memory model and global thread indexing.
+  </Card>
+  <Card title="Assignment 2: Scheduling Strategies" icon="arrows-split-up-and-left" href="/gpu/assignment2-scheduling-strategies">
+    Compares three work-distribution strategies — non-cyclic block partitioning, cyclic round-robin, and exact one-thread-per-element mapping — on a 10,240-element array.
+  </Card>
+  <Card title="Assignment 3: Radix-2 FFT" icon="wave-sine" href="/gpu/assignment3-fft">
+    Implements the Cooley-Tukey radix-2 Fast Fourier Transform on the GPU, computing 8,192 frequency bins in parallel across 4 blocks × 1,024 threads. Co-authored with Jose Espino.
+  </Card>
+  <Card title="N-body Simulation" icon="planet-ringed" href="/gpu/project-nbody-simulation">
+    Gravitational simulation of 30,000 particles. Benchmarks a CPU sequential baseline against a GPU implementation that uses shared memory tiling, measured in Billion Interactions/second.
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+| Component | Detail |
+|-----------|--------|
+| **Language** | CUDA C/C++ |
+| **CUDA Version** | 11.3 |
+| **HPC Platform** | TACC Lonestar6 |
+| **Job Scheduler** | SLURM |
+| **Compiler** | `nvcc` |
+| **Math Library** | `libm` (`math.h`) |
+
+## Key CUDA Concepts Demonstrated
+
+<AccordionGroup>
+  <Accordion title="Global Thread Indexing">
+    When a kernel spans multiple blocks, each thread needs a unique position in the
+    overall data array. The standard formula used throughout these programs is:
+
+    ```cuda
+    int globalThreadIdx = blockIdx.x * blockDim.x + threadIdx.x;
+    ```
+
+    This maps every thread across all blocks to a unique array index, enabling true
+    data-parallel execution with no overlap.
+  </Accordion>
+
+  <Accordion title="CUDA Memory Model">
+    The fundamental host ↔ device workflow appears in every assignment:
+
+    1. **`cudaMalloc`** — allocate memory on the GPU
+    2. **`cudaMemcpy` (HostToDevice)** — send input data to the GPU
+    3. **Kernel launch** (`<<<gridDim, blockDim>>>`) — execute in parallel
+    4. **`cudaMemcpy` (DeviceToHost)** — retrieve results back to the CPU
+    5. **`cudaFree`** — release GPU memory
+
+    The GPU cannot read host (CPU) memory directly; all data must be explicitly transferred.
+  </Accordion>
+
+  <Accordion title="Shared Memory Tiling">
+    The N-body project's GPU kernel uses `__shared__` memory as a fast, on-chip scratchpad.
+    By loading tiles of particle positions into shared memory before computing forces,
+    the kernel reduces global memory traffic by a factor equal to the tile size (1,024),
+    dramatically improving throughput.
+  </Accordion>
+
+  <Accordion title="cudaEvent Timing">
+    The N-body GPU project uses CUDA events for precise kernel-only timing — excluding
+    host-device transfer overhead:
+
+    ```cuda
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    cudaEventRecord(start);
+    // ... kernel launch ...
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+    float timeComp = 0;
+    cudaEventElapsedTime(&timeComp, start, stop); // milliseconds
+    ```
+  </Accordion>
+</AccordionGroup>

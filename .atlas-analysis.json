@@ -1,0 +1,76 @@
+{
+  "projectType": "general",
+  "projectName": "UselessFuru — Code Portfolio",
+  "projectDescription": "A collection of C++, CUDA, and SQL projects built by Alexander Dela Cruz, covering GPU-accelerated parallel computing, relational database design, algorithm problem-solving, and real-time search implementations.",
+  "theme": "palm",
+  "primaryColor": "#3B82F6",
+  "lightColor": "#DBEAFE",
+  "darkColor": "#1E3A5F",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Overview",
+        "groups": [
+          {
+            "group": "Introduction",
+            "pages": ["introduction"]
+          }
+        ]
+      },
+      {
+        "tab": "Projects",
+        "groups": [
+          {
+            "group": "GPU Programming",
+            "pages": [
+              "gpu/overview",
+              "gpu/assignment1-array-multiplication",
+              "gpu/assignment2-scheduling-strategies",
+              "gpu/assignment3-fft",
+              "gpu/project-nbody-simulation"
+            ]
+          },
+          {
+            "group": "Hospital Database",
+            "pages": [
+              "hospital/overview",
+              "hospital/schema",
+              "hospital/queries"
+            ]
+          },
+          {
+            "group": "Programming Techniques",
+            "pages": [
+              "prog-tech/overview",
+              "prog-tech/easy-problems",
+              "prog-tech/map-sorting",
+              "prog-tech/graph-traversal"
+            ]
+          },
+          {
+            "group": "Algorithms",
+            "pages": [
+              "algorithms/overview",
+              "algorithms/dictionary-search"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "CUDA GPU parallel programming: element-wise array multiplication, work scheduling strategies, and radix-2 FFT",
+    "N-body gravitational simulation with shared memory optimization achieving massive speedups over CPU baseline",
+    "MySQL relational database modeling a 9-floor hospital with patients, staff subtypes, treatments, and billing",
+    "C++ solutions to LeetCode and UVA Online Judge problems covering greedy, hash sets, DFS, and more",
+    "Real-time terminal dictionary search using prefix matching with highlighted output and character-by-character input"
+  ],
+  "publicApiSurface": [
+    "CUDA kernels: matrixProduct (Sol1/Sol2/Sol3), radix2FFT, bodyForce (GPU shared memory version)",
+    "CPU N-body baseline: bodyForce() with softened inverse-square gravity + collision detection",
+    "MySQL tables: patient, staff, doctor, nurse, manager, billing, treatment, treatment_staff",
+    "SQL queries: staff by pay rate, costly treatments, doctor-patient pairs, staff per patient, daily pay calculation",
+    "C++ functions: partialMatch(json, string), partialMatch(vector<string>, string), printHighlightedSubstr()",
+    "LeetCode solutions: reverseInt, isPalindrome, canJump, mySqrt, isPalindromeStr, longestConsecutive, topKFrequent, floodFill, numIslands"
+  ]
+}

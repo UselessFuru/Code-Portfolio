@@ -1,0 +1,144 @@
+---
+title: "Assignment 1: Parallel Element-wise Array Multiplication"
+sidebarTitle: "Assignment 1"
+description: "A basic CUDA program that multiplies two 4096-element integer arrays element-by-element using 64 blocks of 64 threads, demonstrating the core GPU memory model."
+---
+
+Assignment 1 is the entry point into GPU programming. The program multiplies two integer arrays
+`a[]` and `b[]` together element-by-element, storing each product in a result array `c[]`. The
+arrays each contain **4,096 elements**, and the computation is fully parallelized: every element
+gets its own dedicated GPU thread.
+
+## What the Program Computes
+
+Arrays are populated on the CPU before any GPU work begins:
+
+```cuda
+for (int i = 0; i < arrSize; i++) {
+    a[i] = i;           // 0, 1, 2, ... 4095
+    b[i] = 4095 + i;    // 4095, 4096, ... 8190
+}
+```
+
+The GPU kernel then computes `c[i] = a[i] * b[i]` for all 4,096 indices simultaneously,
+rather than iterating through a loop on the CPU.
+
+## Grid Configuration
+
+```
+64 blocks  ×  64 threads/block  =  4,096 total threads
+```
+
+Each thread handles exactly one element — no thread ever processes more than one
+multiplication. This is declared in `main` as:
+
+```cuda
+dim3 dimGrid(64, 1, 1);       // 64 blocks
+dim3 dimBlock(blocksize, 1, 1); // 64 threads per block (blocksize = 64)
+
+matrixProduct<<<dimGrid, dimBlock>>>(ad, bd, cd);
+```
+
+<Note>
+  Because the total thread count exactly equals the array size, no bounds-checking
+  is needed inside the kernel. Every thread index maps to a valid array element.
+</Note>
+
+## Global Thread Index
+
+CUDA threads are identified by two coordinates: `blockIdx.x` (which block they belong to)
+and `threadIdx.x` (their position within that block). When multiple blocks are used,
+these must be combined to get a unique position across the entire array:
+
+```cuda
+int globalThreadIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+```
+
+For example, a thread in block 3 at position 7 computes:
+`globalThreadIdx = 3 × 64 + 7 = 199`, and is responsible for `c[199] = a[199] * b[199]`.
+
+## The Kernel
+
+```cuda
+__global__
+void matrixProduct(int *a, int *b, int *c)
+{
+    // Creates a global thread index
+    // cause I'm using more than 1 block
+    int globalThreadIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+
+    // stores product of a and b into c
+    c[globalThreadIdx] = a[globalThreadIdx] * b[globalThreadIdx];
+}
+```
+
+The `__global__` qualifier tells the CUDA compiler this function runs on the GPU and is
+called from the CPU. Each invocation processes exactly one index in a single line of work.
+
+## The CUDA Workflow
+
+The complete host-side lifecycle follows the standard CUDA memory model:
+
+<Steps>
+  <Step title="Allocate GPU Memory">
+    ```cuda
+    const int size = arrSize * sizeof(int);
+
+    cudaMalloc((void**)&ad, size);
+    cudaMalloc((void**)&bd, size);
+    cudaMalloc((void**)&cd, size);
+    ```
+    Three device pointers (`ad`, `bd`, `cd`) are allocated on the GPU to mirror the
+    host arrays.
+  </Step>
+
+  <Step title="Copy Input Data: Host → Device">
+    ```cuda
+    cudaMemcpy(ad, a, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(bd, b, size, cudaMemcpyHostToDevice);
+    ```
+    The GPU cannot access CPU memory directly — input arrays must be explicitly
+    transferred before the kernel can read them.
+  </Step>
+
+  <Step title="Launch the Kernel">
+    ```cuda
+    matrixProduct<<<dimGrid, dimBlock>>>(ad, bd, cd);
+    ```
+    4,096 threads execute simultaneously, each computing one product and writing it
+    to `cd`.
+  </Step>
+
+  <Step title="Copy Results Back: Device → Host">
+    ```cuda
+    cudaMemcpy(c, cd, size, cudaMemcpyDeviceToHost);
+    ```
+    After the kernel finishes, results are copied from GPU memory back into the
+    host array `c[]`.
+  </Step>
+
+  <Step title="Free GPU Memory">
+    ```cuda
+    cudaFree(ad);
+    cudaFree(bd);
+    cudaFree(cd);
+    ```
+    Device memory is released. Unlike host memory, GPU allocations are not
+    automatically freed when the program exits.
+  </Step>
+</Steps>
+
+## Output
+
+After the results are copied back to the host, the program prints a spot-check of the
+first and last elements, then computes and prints the sum of the entire output array:
+
+```
+Summary Results of Array C:
+[0]: 0 * 4095 = 0
+[4095]: 4095 * 8190 = 33538050
+Summation of array C: <total>
+```
+
+The summation serves as a simple correctness check: if any thread wrote to the wrong
+index or produced an incorrect product, the total would differ from the expected value.

@@ -1,0 +1,179 @@
+---
+title: "Assignment 3: Radix-2 FFT on the GPU"
+sidebarTitle: "Assignment 3"
+description: "A CUDA implementation of the radix-2 Fast Fourier Transform (Cooley-Tukey) computing 8192 frequency bins in parallel using 4 blocks of 1024 threads."
+---
+
+Assignment 3 — co-authored by **Alexander Dela Cruz and Jose Espino** — implements the
+**Cooley-Tukey radix-2 Fast Fourier Transform** on the GPU. The FFT decomposes a
+discrete-time signal into its constituent frequencies, and this GPU version computes all
+output frequency bins simultaneously rather than sequentially.
+
+## Background: Radix-2 Decomposition
+
+The Cooley-Tukey algorithm recursively splits a length-N DFT into two length-N/2 DFTs:
+one over the **even-indexed** samples and one over the **odd-indexed** samples. After
+computing both half-size transforms, a set of **butterfly** operations recombine them
+using **twiddle factors** (complex exponentials) to produce the full N-point spectrum.
+
+At the single-level decomposition implemented here:
+
+```
+X[k]       = E[k] + W^k · O[k]
+X[k + N/2] = E[k] - W^k · O[k]
+```
+
+Where:
+- `E[k]` is the k-th frequency bin of the even-indexed half
+- `O[k]` is the k-th frequency bin of the odd-indexed half
+- `W^k = e^{-j 2π k / N}` is the twiddle factor for bin `k`
+
+<Info>
+  This is a **1-level radix-2 decomposition** — the even and odd halves are evaluated
+  as full N/2-point DFTs (not recursively split further). This gives the correct result
+  for any input but has the same O(N²) complexity per level as a direct DFT.
+</Info>
+
+## Input Data
+
+Eight complex numbers are provided as initial samples. The remaining 8,184 values are
+**zero-padded** to reach the required power-of-two length of 8,192:
+
+```cuda
+// 8 complex input samples
+XR[0] = 3.6; XI[0] = 2.6;
+XR[1] = 2.9; XI[1] = 6.3;
+XR[2] = 5.6; XI[2] = 4.0;
+XR[3] = 4.8; XI[3] = 9.1;
+XR[4] = 3.3; XI[4] = 0.4;
+XR[5] = 5.9; XI[5] = 4.8;
+XR[6] = 5.0; XI[6] = 2.6;
+XR[7] = 4.3; XI[7] = 4.1;
+
+// zero-padding to 8192 samples
+for (int i = 8; i < arrSize; i++) {
+    XR[i] = 0;
+    XI[i] = 0;
+}
+```
+
+<Note>
+  Real and imaginary parts are stored in **separate float arrays** (`XR[]` and `XI[]`)
+  rather than as interleaved complex structs. This keeps the data layout simple and avoids
+  struct-alignment overhead during GPU memory transfers.
+</Note>
+
+## Data Representation
+
+| Array | Contents | Type |
+|-------|----------|------|
+| `XR[8192]` | Real parts of all N samples (input) and frequency bins (output) | `float` |
+| `XI[8192]` | Imaginary parts of all N samples (input) and frequency bins (output) | `float` |
+
+The kernel **overwrites** `XR` and `XI` in place with the transform output.
+
+## Grid Configuration
+
+```
+4 blocks  ×  1,024 threads/block  =  4,096 total threads
+```
+
+Each of the 4,096 threads computes **one output frequency bin** `k`, where
+`k = globalThreadIdx`. Because the butterfly relation covers both `X[k]` and `X[k + N/2]`,
+each thread actually writes **two output elements** — covering all 8,192 output bins in one
+kernel launch.
+
+## The Kernel
+
+```cuda
+__global__
+void radix2FFT(float *XR, float *XI) {
+    // creates a global thread index
+    // cause I'm using more than 1 block
+    int globalThreadIdx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    // initializes float variables for summation later
+    float evenReal = 0.0f, evenImag = 0.0f;
+    float oddReal  = 0.0f, oddImag  = 0.0f;
+
+    // for loop to sum over even and odd indices
+    for (int i = 0; i < arrSize/2; i++) {
+
+        // even index
+        float evenreal = XR[2 * i];
+        float evenimag = XI[2 * i];
+
+        // odd index
+        float oddreal  = XR[(2 * i) + 1];
+        float oddimag  = XI[(2 * i) + 1];
+
+        // calculates the angle where n (iterator) is i and k (frequency) is globalThreadIdx
+        // -j 2pi (k*n)/(N/2) ignoring the j gives -2 pi k * n / N2
+        float angle = -2.0f * M_PI * globalThreadIdx * i / (arrSize/2);
+
+        // calculates summation of even real/imag values
+        evenReal += (evenreal * cosf(angle)) - (evenimag * sinf(angle));
+        evenImag += (evenreal * sinf(angle)) + (evenimag * cosf(angle));
+
+        // calculates summation of odd real/imag values
+        oddReal += (oddreal * cosf(angle)) - (oddimag * sinf(angle));
+        oddImag += (oddreal * sinf(angle)) + (oddimag * cosf(angle));
+    }
+
+    // calculates twiddle factor real/imag values
+    float twiddleReal = cosf(-2.0f * M_PI * globalThreadIdx / arrSize);
+    float twiddleImag = sinf(-2.0f * M_PI * globalThreadIdx / arrSize);
+
+    // multiply odd real/imag by twiddle factor
+    float twiddleOddReal = (oddReal * twiddleReal) - (oddImag * twiddleImag);
+    float twiddleOddImag = (oddReal * twiddleImag) + (oddImag * twiddleReal);
+
+    // compute final X[globalThreadIdx] and X[globalThreadIdx + (N/2)]
+    XR[globalThreadIdx]               = evenReal + twiddleOddReal;
+    XI[globalThreadIdx]               = evenImag + twiddleOddImag;
+    XR[globalThreadIdx + (arrSize/2)] = evenReal - twiddleOddReal;
+    XI[globalThreadIdx + (arrSize/2)] = evenImag - twiddleOddImag;
+}
+```
+
+## How Each Thread Works
+
+Each thread with index `k = globalThreadIdx` performs three phases:
+
+<Steps>
+  <Step title="Compute the N/2-point DFT of even-indexed samples (E[k])">
+    The thread iterates over all 4,096 even-indexed input values (`XR[0]`, `XR[2]`, `XR[4]`, …)
+    and accumulates their contribution to frequency bin `k` using the rotation angle
+    `θ = -2π k n / (N/2)`.
+  </Step>
+
+  <Step title="Compute the N/2-point DFT of odd-indexed samples (O[k])">
+    Simultaneously in the same loop, the thread processes odd-indexed values (`XR[1]`, `XR[3]`,
+    `XR[5]`, …) with the same angle, producing `oddReal` and `oddImag`.
+  </Step>
+
+  <Step title="Apply the butterfly with twiddle factor">
+    The twiddle factor `W^k = e^{-j 2π k / N}` is computed and multiplied with the odd
+    result. The butterfly equations then write:
+    - `X[k]       = E[k] + W^k · O[k]` → into `XR[k]`, `XI[k]`
+    - `X[k + N/2] = E[k] - W^k · O[k]` → into `XR[k + 4096]`, `XI[k + 4096]`
+  </Step>
+</Steps>
+
+## Output
+
+After the kernel completes and results are copied back from the GPU, the program prints
+the first 8 frequency bins:
+
+```
+TOTAL PROCESSED SAMPLES: 8192
+================================
+XR[0]: 35.400002 XI[0]: 38.400002
+XR[1]: ...       XI[1]: ...
+...
+XR[7]: ...       XI[7]: ...
+================================
+```
+
+Bin 0 (`XR[0]`, `XI[0]`) represents the DC component — the sum of all real and imaginary
+inputs respectively — which can be verified by hand from the 8 input samples.

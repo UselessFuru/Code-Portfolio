@@ -1,0 +1,59 @@
+---
+title: "UselessFuru: GPU, Database, and Algorithm Projects"
+sidebarTitle: "Introduction"
+description: "An overview of Alexander Dela Cruz's coding portfolio: four projects spanning CUDA GPU programming, MySQL database design, C++ algorithms, and real-time search."
+---
+
+**UselessFuru** is a code portfolio by Alexander Dela Cruz containing four distinct projects that demonstrate systems programming, parallel computing, relational database design, and algorithmic problem solving. Whether you're here to explore GPU kernels, trace through a hospital's data model, review competitive programming solutions, or see a terminal search tool in action, each project is documented to give you a clear picture of how it works and why it was built the way it was.
+
+## Projects
+
+### GPU Programming
+
+Three CUDA programming assignments and one final project, all developed and run on the **TACC Lonestar6 HPC cluster**. The assignments progress from basic parallel array operations and work scheduling strategies through to a radix-2 Fast Fourier Transform (FFT) implementation. The final project is an **N-body gravity simulation** that models gravitational interactions between bodies using shared memory optimization for performance.
+
+### Hospital Database
+
+A **MySQL relational database** that models the operations of a 9-floor hospital across 8 tables: `patient`, `staff`, `doctor`, `nurse`, `manager`, `billing`, `treatment`, and `treatment_staff`. The database is populated with 108 patients, 54 staff members, 108 treatments, and 108 billing records. Staff are organized into subtypes (doctor, nurse, manager) using a subtype relationship off the central `staff` table, allowing queries to span roles while keeping the schema normalized.
+
+### Programming Techniques
+
+A collection of **C++ solutions to LeetCode and UVA Online Judge problems**, organized by the technique each problem demonstrates. Topics covered include integer math, string processing, greedy algorithms, hash sets, map-based sorting, and DFS graph traversal. Each solution is written to be readable and illustrative of the underlying algorithm pattern rather than purely optimized for submission.
+
+### Algorithms
+
+A **real-time terminal dictionary search tool** written in C++. The program reads character-by-character input using `getch()` — without waiting for the user to press Enter — and searches a JSON dictionary file for words matching the current prefix. Matches are displayed instantly in the terminal with **color highlighting**, giving you an interactive autocomplete-style experience entirely in the command line. The dictionary data is parsed using the `nlohmann::json` library.
+
+## Technologies Used
+
+<CardGroup cols={2}>
+  <Card title="CUDA C/C++" icon="microchip">
+    GPU kernel development, shared memory optimization, and parallel execution on TACC Lonestar6 HPC hardware.
+  </Card>
+  <Card title="MySQL" icon="database">
+    Relational schema design, subtype modeling, and structured population of a normalized hospital database.
+  </Card>
+  <Card title="C++ STL" icon="code">
+    Standard library containers and algorithms used across competitive programming solutions and the dictionary search tool.
+  </Card>
+  <Card title="JSON / nlohmann::json" icon="brackets-curly">
+    Dictionary data stored in JSON format and parsed at runtime using the nlohmann::json C++ library.
+  </Card>
+</CardGroup>
+
+## Explore the Projects
+
+<CardGroup cols={2}>
+  <Card title="GPU Programming" icon="microchip" href="/gpu/overview">
+    Parallel computing with CUDA — from array ops to N-body simulation.
+  </Card>
+  <Card title="Hospital Database" icon="database" href="/hospital/overview">
+    MySQL schema modeling a 9-floor hospital with patients, staff, and billing.
+  </Card>
+  <Card title="Programming Techniques" icon="code" href="/prog-tech/overview">
+    C++ solutions to algorithmic problems from LeetCode and UVA.
+  </Card>
+  <Card title="Algorithms" icon="magnifying-glass" href="/algorithms/overview">
+    Real-time dictionary search with prefix matching and color output.
+  </Card>
+</CardGroup>

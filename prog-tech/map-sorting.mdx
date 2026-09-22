@@ -1,0 +1,118 @@
+---
+title: "Hardwood Sneezy: Map-Based Word Frequency Sorting"
+sidebarTitle: "Map & Sorting"
+description: "A C++ solution to LeetCode P-692 that counts word frequencies using std::map, then sorts by frequency descending and lexicographic order to return the top K words."
+---
+
+Assignment A06 – *Hardwood Sneezy* focuses on combining `std::map` for frequency counting with a custom sort comparator to impose a two-level ordering on results. The single problem in this assignment — **LeetCode P-692** — is a clean demonstration of how the right choice of container can simplify tie-breaking logic.
+
+---
+
+## P-692: Top K Frequent Words
+
+Given a list of strings `words` and an integer `k`, return the `k` most frequently occurring words. Results must be sorted by **frequency descending**; when two words have the same frequency, they are ordered **alphabetically**.
+
+### Algorithm Walkthrough
+
+**Step 1 — Count frequencies with `std::map`**
+
+Each word in `words` is used as a key in a `std::map<string, int>`. The `++` operator increments its count on every encounter, defaulting to `0` for new keys.
+
+```cpp
+map<string, int> map;
+
+for (const string& word : words) {
+    map[word]++;  // counts frequencies of words
+}
+```
+
+Because `std::map` stores keys in sorted order, iterating over it during Step 2 already visits words alphabetically — a property that aids the tie-breaking step.
+
+**Step 2 — Transfer to a `vector` of pairs**
+
+The map is copied into a `vector<pair<string, int>>` so that it can be passed to `std::sort`.
+
+```cpp
+vector<pair<string, int>> vecPair;
+
+for (const auto& entry : map)
+    vecPair.push_back(entry);  // stores pair in vecPair
+```
+
+**Step 3 — Sort with a custom comparator**
+
+A static comparator function `compare` imposes the required two-level ordering: higher frequency first, alphabetical order for ties.
+
+```cpp
+static bool compare(const pair<string, int>& a, const pair<string, int>& b) {
+    if (a.second == b.second)   // compares frequencies
+        return a.first < b.first; // sorts alphabetically if frequencies are the same
+    return a.second > b.second;   // sorts frequency in descending order otherwise
+}
+```
+
+`sort` is then called with this comparator:
+
+```cpp
+sort(vecPair.begin(), vecPair.end(), compare);
+```
+
+**Step 4 — Extract the first `k` words**
+
+```cpp
+vector<string> results;
+for(int i = 0; i < k; i++)
+    results.push_back(vecPair[i].first);
+
+return results;
+```
+
+---
+
+### Full Solution
+
+```cpp
+#include <algorithm>
+#include <map>
+
+class Solution {
+public:
+    static bool compare(const pair<string, int>& a, const pair<string, int>& b) {
+        if (a.second == b.second)   // compares frequencies
+            return a.first < b.first; // alphabetical if tied
+        return a.second > b.second;   // descending frequency otherwise
+    }
+
+    vector<string> topKFrequent(vector<string>& words, int k) {
+        map<string, int> map;
+
+        for (const string& word : words) {
+            map[word]++;  // counts frequencies of words
+        }
+
+        vector<pair<string, int>> vecPair;  // vector of pairs
+
+        for (const auto& entry : map)
+            vecPair.push_back(entry);  // store each (word, count) pair
+
+        sort(vecPair.begin(), vecPair.end(), compare);
+
+        for (const auto& entry : vecPair)
+            cout << entry.first << ": " << entry.second << endl;  // debug output
+
+        vector<string> results;
+        for(int i = 0; i < k; i++)
+            results.push_back(vecPair[i].first);
+
+        return results;
+    }
+};
+```
+
+---
+
+### Why `std::map` for Counting?
+
+`std::map` keeps its keys in ascending sorted order at all times. This means that when the map is iterated and copied into `vecPair`, words that share the same frequency are already in **alphabetical order** within each frequency tier. The comparator only has to enforce one sort pass — if the `std::sort` algorithm encounters two equal-frequency entries, it compares their strings lexicographically. Because the source data came out of the map in alphabetical order, and the comparator preserves that ordering for ties, the result is always correct.
+
+An `std::unordered_map` would be faster for raw lookups but would discard the alphabetical ordering, requiring extra care in the comparator or a secondary sort step.
