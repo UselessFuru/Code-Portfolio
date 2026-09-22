@@ -1,7 +1,7 @@
 ---
 title: "Programming Techniques (CMPS 4883): Course Project Overview"
 sidebarTitle: "Overview"
-description: "An overview of CMPS 4883 Programming Techniques assignments: C++ solutions to LeetCode and UVA Online Judge problems covering fundamentals, sorting, priority queues, and graph traversal."
+description: "CMPS 4883 Programming Techniques: C++ solutions to LeetCode and UVA Judge problems covering integer math, sorting, map-based counting, and graph traversal."
 ---
 
 CMPS 4883 – Programming Techniques is a course at Midwestern State University (MSU Texas), with this project authored by **Alexander Dela Cruz**. The assignments consist of C++ solutions to competitive programming problems sourced from [LeetCode](https://leetcode.com) and the [UVA Online Judge](https://onlinejudge.org), progressing from foundational algorithm design to more advanced data structures and graph traversal.
@@ -10,7 +10,7 @@ CMPS 4883 – Programming Techniques is a course at Midwestern State University 
 
 | Assignment | Name | Topics Covered |
 |:---:|---|---|
-| **A05** | [Easy Breezy](/prog-tech/easy-problems) | Basic algorithms — integer math, string manipulation, greedy reachability, binary search, hash sets |
+| **A05** | [Easy Breezy](/prog-tech/easy-problems) | Basic algorithms — integer math, string manipulation, greedy reachability, linear search, two-pointer scanning |
 | **A06** | [Hardwood Sneezy](/prog-tech/map-sorting) | Map-based frequency counting and custom sort comparators |
 | **A07** | Priority Queezy | Priority queues *(no code submitted)* |
 | **A08** | [Graphin Sleezy](/prog-tech/graph-traversal) | Graph traversal — DFS on 2D grids, flood fill, and connected components |
@@ -22,13 +22,13 @@ All solutions are written in **C++** and make use of the C++ Standard Template L
 - **`std::map`** — ordered key–value storage used for word frequency counting
 - **`std::stack`** — explicit stack for iterative depth-first search
 - **`std::vector`** — dynamic arrays used throughout for grids, pairs, and character buffers
-- **`std::unordered_set`** *(task spec)* / **`std::sort`** — used for sequence detection
+- **`std::sort`** — used with a custom comparator for multi-key ordering, and for sequence detection in P-128
 
 ## Pages in This Section
 
 <CardGroup cols={3}>
   <Card title="Easy Problems (A05)" icon="code" href="/prog-tech/easy-problems">
-    Eight LeetCode and two UVA Online Judge problems covering integer math, palindromes, greedy reachability, and string manipulation.
+    Eight LeetCode and two UVA Online Judge problems covering integer math, palindromes, greedy reachability, linear search, and cursor simulation.
   </Card>
   <Card title="Map & Sorting (A06)" icon="arrow-down-wide-short" href="/prog-tech/map-sorting">
     LeetCode P-692: counting word frequencies with `std::map` and sorting by a custom comparator.

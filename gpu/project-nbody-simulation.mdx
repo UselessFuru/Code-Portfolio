@@ -1,7 +1,7 @@
 ---
-title: "N-body Gravitational Simulation: CPU vs GPU"
+title: "N-body Gravitational Simulation: CPU Baseline vs GPU"
 sidebarTitle: "N-body Simulation"
-description: "An N-body gravitational simulation of 30,000 particles comparing a CPU sequential baseline against a GPU implementation using shared memory tiling, measured in billion interactions per second."
+description: "Simulates gravity among 30,000 particles: a CPU O(N²) loop versus a GPU shared memory tiling kernel, benchmarked in billion interactions per second."
 ---
 
 The final project simulates **gravitational forces among 30,000 particles** and benchmarks
@@ -251,13 +251,22 @@ each pair is logged exactly once, mirroring the CPU baseline's `i < j` guard.
 
 ## Output
 
-Both programs produce the same result format:
+Both programs print their results in the same general format, though the exact labels differ slightly between the CPU and GPU versions:
 
+**CPU (`ProjectSeq.cu`):**
 ```
 === RESULTS ===
 30000 Bodies: X.XXX Billion Interactions/sec
 Average time per iteration (excluding warm-up): X.XXX sec
 Total time for all iterations: X.XXX sec
+```
+
+**GPU (`ProjectShared.cu`):**
+```
+=== RESULTS ===
+30000 Bodies: X.XXX Billion Interactions/sec
+Average time per iteration: X.XXX sec
+Total GPU kernel time: X.XXX sec
 ```
 
 The GPU shared memory version is expected to significantly outperform the CPU baseline

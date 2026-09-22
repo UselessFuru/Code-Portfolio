@@ -1,7 +1,7 @@
 ---
 title: "Real-Time Dictionary Search with Prefix Matching in C++"
 sidebarTitle: "Dictionary Search"
-description: "A terminal-based C++ program that performs live prefix matching against a JSON dictionary file, highlighting matches in color and printing definitions when exactly one match remains."
+description: "Deep dive into P02: how the C++ dictionary search uses prefix matching on a JSON file, color-highlights results with rang.hpp, and auto-prints definitions."
 ---
 
 P02 implements a type-ahead dictionary search in C++. As each character is typed into the terminal, the program re-scans the entire dictionary for words whose keys begin with the characters typed so far, then renders every match with the matching prefix highlighted in red and the rest of the word in blue. Once the prefix narrows down to a single word, the program automatically prints that word's full definition — no Enter key required at any point.
@@ -235,7 +235,7 @@ void printHighlightedSubstr(string word, string substr, int loc) {
 
 ### `Timer` class (`headers/timer.hpp`)
 
-A lightweight RAII-style timer that wraps `std::chrono::steady_clock`. Call `Start()` before a block and `End()` after it, then query the elapsed time in seconds, milliseconds, or nanoseconds.
+A lightweight timer class that wraps `std::chrono::steady_clock`. Call `Start()` before a block and `End()` after it, then query the elapsed time in seconds, milliseconds, or nanoseconds.
 
 ```cpp
 class Timer {
