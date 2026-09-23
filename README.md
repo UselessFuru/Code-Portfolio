@@ -1,55 +1,35 @@
-# Mintlify Starter Kit
+# UselessFuru — Code Portfolio
 
-Use the starter kit to get your docs deployed and ready to customize.
+A code portfolio by **Alexander Dela Cruz** containing four projects that demonstrate systems programming, parallel computing, relational database design, and algorithmic problem solving.
 
-Click the green **Use this template** button at the top of this repo to copy the Mintlify starter kit. The starter kit contains examples with
+📖 **Live documentation:** https://ueseless-productions.mintlify.app
 
-- Guide pages
-- Navigation
-- Customizations
-- API reference pages
-- Use of popular components
+## Projects
 
-**[Follow the full quickstart guide](https://starter.mintlify.com/quickstart)**
+### GPU Programming
+Three CUDA assignments and one final project, developed on the **TACC Lonestar6 HPC cluster** using **CUDA 11.3**. Covers parallel array operations, work scheduling strategies, a radix-2 FFT implementation, and an **N-body gravity simulation** with shared memory optimization.
 
-## AI-assisted writing
+### Hospital Database
+A **MySQL relational database** modeling a 9-floor hospital across 8 tables (`patient`, `staff`, `doctor`, `nurse`, `manager`, `billing`, `treatment`, `treatment_staff`), populated with 108 patients, 54 staff, 108 treatments, and 108 billing records. Uses a subtype relationship off `staff` to keep the schema normalized.
 
-Set up your AI coding tool to work with Mintlify:
+### Programming Techniques
+**C++ solutions to LeetCode and UVA Online Judge problems**, organized by technique: integer math, string processing, greedy algorithms, hash sets, map-based sorting, and DFS graph traversal.
 
-```bash
-npx skills add https://mintlify.com/docs
-```
+### Algorithms
+A **real-time terminal dictionary search tool** in C++. Reads character-by-character input via `getch()` and searches a JSON dictionary for prefix matches, displaying results instantly with color highlighting. Uses `nlohmann::json` for parsing.
 
-This command installs Mintlify's documentation skill for your configured AI tools like Claude Code, Cursor, Windsurf, and others. The skill includes component reference, writing standards, and workflow guidance.
+## Technologies
 
-See the [AI tools guides](/ai-tools) for tool-specific setup.
+- **CUDA C/C++** — GPU kernel development, shared memory optimization, TACC Lonestar6 HPC
+- **MySQL** — Relational schema design, subtype modeling
+- **C++ STL** — Containers and algorithms across competitive programming solutions
+- **JSON / nlohmann::json** — Dictionary parsing for the search tool
 
-## Development
+## Documentation
 
-Install the [Mintlify CLI](https://www.npmjs.com/package/mint) to preview your documentation changes locally. To install, use the following command:
+Full write-ups for each project live on the documentation site:
 
-```
-npm i -g mint
-```
-
-Run the following command at the root of your documentation, where your `docs.json` is located:
-
-```
-mint dev
-```
-
-View your local preview at `http://localhost:3000`.
-
-## Publishing changes
-
-Install our GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app) to propagate changes from your repo to your deployment. Changes are deployed to production automatically after pushing to the default branch.
-
-## Need help?
-
-### Troubleshooting
-
-- If your dev environment isn't running: Run `mint update` to ensure you have the most recent version of the CLI.
-- If a page loads as a 404: Make sure you are running in a folder with a valid `docs.json`.
-
-### Resources
-- [Mintlify documentation](https://mintlify.com/docs)
+- [GPU Programming](https://ueseless-productions.mintlify.app/gpu/overview)
+- [Hospital Database](https://ueseless-productions.mintlify.app/hospital/overview)
+- [Programming Techniques](https://ueseless-productions.mintlify.app/prog-tech/overview)
+- [Algorithms](https://ueseless-productions.mintlify.app/algorithms/overview)
